@@ -9,40 +9,41 @@ import (
 )
 
 // Download main download function
-func Download(url string) ([]downloader.VideoData, error) {
+func Download(url string) ([]downloader.Data, error) {
 	fmt.Println()
 	fmt.Println("annie doesn't support this URL right now, but it will try to download it directly")
 
 	filename, ext, err := utils.GetNameAndExt(url)
 	if err != nil {
-		return downloader.EmptyData, err
+		return downloader.EmptyList, err
 	}
 	size, err := request.Size(url, url)
 	if err != nil {
-		return downloader.EmptyData, err
+		return downloader.EmptyList, err
 	}
-	urlData := downloader.URLData{
+	urlData := downloader.URL{
 		URL:  url,
 		Size: size,
 		Ext:  ext,
 	}
-	format := map[string]downloader.FormatData{
+	streams := map[string]downloader.Stream{
 		"default": {
-			URLs: []downloader.URLData{urlData},
+			URLs: []downloader.URL{urlData},
 			Size: size,
 		},
 	}
 	contentType, err := request.ContentType(url, url)
 	if err != nil {
-		return downloader.EmptyData, err
+		return downloader.EmptyList, err
 	}
 
-	return []downloader.VideoData{
+	return []downloader.Data{
 		{
 			Site:    "Universal",
 			Title:   utils.FileName(filename),
 			Type:    contentType,
-			Formats: format,
+			Streams: streams,
+			URL:     url,
 		},
 	}, nil
 }

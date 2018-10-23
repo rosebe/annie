@@ -95,10 +95,10 @@ func encodeTk2(str string) string {
 }
 
 // Download main download function
-func Download(url string) ([]downloader.VideoData, error) {
+func Download(url string) ([]downloader.Data, error) {
 	html, err := request.Get(url, url, nil)
 	if err != nil {
-		return downloader.EmptyData, err
+		return downloader.EmptyList, err
 	}
 	vid := utils.MatchOneOf(
 		url,
@@ -127,7 +127,7 @@ func Download(url string) ([]downloader.VideoData, error) {
 		headers,
 	)
 	if err != nil {
-		return downloader.EmptyData, err
+		return downloader.EmptyList, err
 	}
 	var pm2 mgtvPm2Data
 	json.Unmarshal([]byte(pm2DataString), &pm2)
@@ -140,17 +140,17 @@ func Download(url string) ([]downloader.VideoData, error) {
 		headers,
 	)
 	if err != nil {
-		return downloader.EmptyData, err
+		return downloader.EmptyList, err
 	}
 	var mgtvData mgtv
 	json.Unmarshal([]byte(dataString), &mgtvData)
 	title := strings.TrimSpace(
 		pm2.Data.Info.Title + " " + pm2.Data.Info.Desc,
 	)
-	streams := mgtvData.Data.Stream
+	mgtvStreams := mgtvData.Data.Stream
 	var addr mgtvVideoAddr
-	format := map[string]downloader.FormatData{}
-	for _, stream := range streams {
+	streams := map[string]downloader.Stream{}
+	for _, stream := range mgtvStreams {
 		if stream.URL == "" {
 			continue
 		}
@@ -158,34 +158,35 @@ func Download(url string) ([]downloader.VideoData, error) {
 		addr = mgtvVideoAddr{}
 		addrInfo, err := request.Get(mgtvData.Data.StreamDomain[0]+stream.URL, url, headers)
 		if err != nil {
-			return downloader.EmptyData, err
+			return downloader.EmptyList, err
 		}
 		json.Unmarshal([]byte(addrInfo), &addr)
 		m3u8URLs, totalSize, err := mgtvM3u8(addr.Info)
 		if err != nil {
-			return downloader.EmptyData, err
+			return downloader.EmptyList, err
 		}
-		urls := make([]downloader.URLData, len(m3u8URLs))
+		urls := make([]downloader.URL, len(m3u8URLs))
 		for index, u := range m3u8URLs {
-			urls[index] = downloader.URLData{
+			urls[index] = downloader.URL{
 				URL:  u.URL,
 				Size: u.Size,
 				Ext:  "ts",
 			}
 		}
-		format[stream.Def] = downloader.FormatData{
+		streams[stream.Def] = downloader.Stream{
 			URLs:    urls,
 			Size:    totalSize,
 			Quality: stream.Name,
 		}
 	}
 
-	return []downloader.VideoData{
+	return []downloader.Data{
 		{
 			Site:    "芒果TV mgtv.com",
 			Title:   title,
 			Type:    "video",
-			Formats: format,
+			Streams: streams,
+			URL:     url,
 		},
 	}, nil
 }

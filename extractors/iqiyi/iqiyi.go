@@ -53,10 +53,10 @@ func getIqiyiData(tvid, vid string) (iqiyi, error) {
 }
 
 // Download main download function
-func Download(url string) ([]downloader.VideoData, error) {
+func Download(url string) ([]downloader.Data, error) {
 	html, err := request.Get(url, iqiyiReferer, nil)
 	if err != nil {
-		return downloader.EmptyData, err
+		return downloader.EmptyList, err
 	}
 	tvid := utils.MatchOneOf(
 		url,
@@ -86,7 +86,7 @@ func Download(url string) ([]downloader.VideoData, error) {
 	}
 	doc, err := parser.GetDoc(html)
 	if err != nil {
-		return downloader.EmptyData, err
+		return downloader.EmptyList, err
 	}
 	title := strings.TrimSpace(doc.Find("h1>a").First().Text())
 	var sub string
@@ -102,49 +102,50 @@ func Download(url string) ([]downloader.VideoData, error) {
 	}
 	videoDatas, err := getIqiyiData(tvid[1], vid[1])
 	if err != nil {
-		return downloader.EmptyData, err
+		return downloader.EmptyList, err
 	}
 	if videoDatas.Code != "A00000" {
-		return downloader.EmptyData, errors.New("can't play this video")
+		return downloader.EmptyList, errors.New("can't play this video")
 	}
-	format := map[string]downloader.FormatData{}
+	streams := map[string]downloader.Stream{}
 	var size, totalSize int64
 	for _, video := range videoDatas.Data.Vidl {
 		if video.Vd == 14 {
-			// This format will go wrong when merging
+			// This stream will go wrong when merging
 			continue
 		}
 		totalSize = 0
 		m3u8URLs, err := utils.M3u8URLs(video.M3utx)
 		if err != nil {
-			return downloader.EmptyData, err
+			return downloader.EmptyList, err
 		}
-		urls := make([]downloader.URLData, len(m3u8URLs))
+		urls := make([]downloader.URL, len(m3u8URLs))
 		for index, ts := range m3u8URLs {
 			size, _ = strconv.ParseInt(
 				utils.MatchOneOf(ts, `contentlength=(\d+)`)[1], 10, 64,
 			)
 			totalSize += size
-			urls[index] = downloader.URLData{
+			urls[index] = downloader.URL{
 				// http://dx.data.video.qiyi.com -> http://data.video.qiyi.com
 				URL:  strings.Replace(ts, "dx.data.video.qiyi.com", "data.video.qiyi.com", 1),
 				Size: size,
 				Ext:  "ts",
 			}
 		}
-		format[strconv.Itoa(video.Vd)] = downloader.FormatData{
+		streams[strconv.Itoa(video.Vd)] = downloader.Stream{
 			URLs:    urls,
 			Size:    totalSize,
 			Quality: video.ScreenSize,
 		}
 	}
 
-	return []downloader.VideoData{
+	return []downloader.Data{
 		{
 			Site:    "爱奇艺 iqiyi.com",
 			Title:   utils.FileName(title),
 			Type:    "video",
-			Formats: format,
+			Streams: streams,
+			URL:     url,
 		},
 	}, nil
 }

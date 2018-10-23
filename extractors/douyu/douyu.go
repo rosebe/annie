@@ -48,52 +48,53 @@ func douyuM3u8(url string) ([]douyuURLInfo, int64, error) {
 }
 
 // Download main download function
-func Download(url string) ([]downloader.VideoData, error) {
+func Download(url string) ([]downloader.Data, error) {
 	var err error
 	liveVid := utils.MatchOneOf(url, `https?://www.douyu.com/(\S+)`)
 	if liveVid != nil {
-		return downloader.EmptyData, errors.New("暂不支持斗鱼直播")
+		return downloader.EmptyList, errors.New("暂不支持斗鱼直播")
 	}
 
 	html, err := request.Get(url, url, nil)
 	if err != nil {
-		return downloader.EmptyData, err
+		return downloader.EmptyList, err
 	}
 	title := utils.MatchOneOf(html, `<title>(.*?)</title>`)[1]
 
 	vid := utils.MatchOneOf(url, `https?://v.douyu.com/show/(\S+)`)[1]
 	dataString, err := request.Get("http://vmobile.douyu.com/video/getInfo?vid="+vid, url, nil)
 	if err != nil {
-		return downloader.EmptyData, err
+		return downloader.EmptyList, err
 	}
 	var dataDict douyuData
 	json.Unmarshal([]byte(dataString), &dataDict)
 
 	m3u8URLs, totalSize, err := douyuM3u8(dataDict.Data.VideoURL)
 	if err != nil {
-		return downloader.EmptyData, err
+		return downloader.EmptyList, err
 	}
-	urls := make([]downloader.URLData, len(m3u8URLs))
+	urls := make([]downloader.URL, len(m3u8URLs))
 	for index, u := range m3u8URLs {
-		urls[index] = downloader.URLData{
+		urls[index] = downloader.URL{
 			URL:  u.URL,
 			Size: u.Size,
 			Ext:  "ts",
 		}
 	}
 
-	format := map[string]downloader.FormatData{
+	streams := map[string]downloader.Stream{
 		"default": {
 			URLs: urls,
 			Size: totalSize,
 		},
 	}
-	return []downloader.VideoData{
+	return []downloader.Data{
 		{
 			Site:    "斗鱼 douyu.com",
 			Title:   title,
 			Type:    "video",
-			Formats: format,
+			Streams: streams,
+			URL:     url,
 		},
 	}, nil
 }

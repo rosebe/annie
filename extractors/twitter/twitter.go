@@ -20,10 +20,10 @@ type twitter struct {
 }
 
 // Download main download function
-func Download(uri string) ([]downloader.VideoData, error) {
+func Download(uri string) ([]downloader.Data, error) {
 	html, err := request.Get(uri, uri, nil)
 	if err != nil {
-		return downloader.EmptyData, err
+		return downloader.EmptyList, err
 	}
 	username := utils.MatchOneOf(html, `property="og:title"\s+content="(.+)"`)[1]
 	tweetID := utils.MatchOneOf(uri, `(status|statuses)/(\d+)`)[2]
@@ -35,7 +35,7 @@ func Download(uri string) ([]downloader.VideoData, error) {
 	}
 	jsonString, err := request.Get(api, uri, headers)
 	if err != nil {
-		return downloader.EmptyData, err
+		return downloader.EmptyList, err
 	}
 	var twitterData twitter
 	json.Unmarshal([]byte(jsonString), &twitterData)
@@ -43,37 +43,37 @@ func Download(uri string) ([]downloader.VideoData, error) {
 	twitterData.Username = username
 	extractedData, err := download(twitterData, uri)
 	if err != nil {
-		return downloader.EmptyData, err
+		return downloader.EmptyList, err
 	}
 	return extractedData, nil
 }
 
-func download(data twitter, uri string) ([]downloader.VideoData, error) {
+func download(data twitter, uri string) ([]downloader.Data, error) {
 	var (
 		err  error
 		size int64
 	)
-	format := make(map[string]downloader.FormatData)
+	streams := make(map[string]downloader.Stream)
 	switch {
 	// if video file is m3u8 and ts
 	case strings.Contains(data.Track.URL, ".m3u8"):
 		m3u8urls, err := utils.M3u8URLs(data.Track.URL)
 		if err != nil {
-			return downloader.EmptyData, err
+			return downloader.EmptyList, err
 		}
 		for index, m3u8 := range m3u8urls {
 			var totalSize int64
-			var urls []downloader.URLData
+			var urls []downloader.URL
 			ts, err := utils.M3u8URLs(m3u8)
 			if err != nil {
-				return downloader.EmptyData, err
+				return downloader.EmptyList, err
 			}
 			for _, i := range ts {
 				size, err := request.Size(i, uri)
 				if err != nil {
-					return downloader.EmptyData, err
+					return downloader.EmptyList, err
 				}
-				temp := downloader.URLData{
+				temp := downloader.URL{
 					URL:  i,
 					Size: size,
 					Ext:  "ts",
@@ -83,7 +83,7 @@ func download(data twitter, uri string) ([]downloader.VideoData, error) {
 			}
 			qualityString := utils.MatchOneOf(m3u8, `/(\d+x\d+)/`)[1]
 			quality := strconv.Itoa(index + 1)
-			format[quality] = downloader.FormatData{
+			streams[quality] = downloader.Stream{
 				Quality: qualityString,
 				URLs:    urls,
 				Size:    totalSize,
@@ -94,25 +94,26 @@ func download(data twitter, uri string) ([]downloader.VideoData, error) {
 	case strings.Contains(data.Track.URL, ".mp4"):
 		size, err = request.Size(data.Track.URL, uri)
 		if err != nil {
-			return downloader.EmptyData, err
+			return downloader.EmptyList, err
 		}
-		urlData := downloader.URLData{
+		urlData := downloader.URL{
 			URL:  data.Track.URL,
 			Size: size,
 			Ext:  "mp4",
 		}
-		format["default"] = downloader.FormatData{
-			URLs: []downloader.URLData{urlData},
+		streams["default"] = downloader.Stream{
+			URLs: []downloader.URL{urlData},
 			Size: size,
 		}
 	}
 
-	return []downloader.VideoData{
+	return []downloader.Data{
 		{
 			Site:    "Twitter twitter.com",
 			Title:   fmt.Sprintf("%s %s", data.Username, data.TweetID),
 			Type:    "video",
-			Formats: format,
+			Streams: streams,
+			URL:     uri,
 		},
 	}, nil
 }

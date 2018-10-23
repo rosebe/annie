@@ -42,7 +42,7 @@ func init() {
 	flag.StringVar(&config.Refer, "r", "", "Use specified Referrer")
 	flag.StringVar(&config.Proxy, "x", "", "HTTP proxy")
 	flag.StringVar(&config.Socks5Proxy, "s", "", "SOCKS5 proxy")
-	flag.StringVar(&config.Format, "f", "", "Select specific format to download")
+	flag.StringVar(&config.Stream, "f", "", "Select specific stream to download")
 	flag.StringVar(&config.OutputPath, "o", "", "Specify the output path")
 	flag.StringVar(&config.OutputName, "O", "", "Specify the output file name")
 	flag.BoolVar(&config.ExtractedData, "j", false, "Print extracted data")
@@ -78,7 +78,7 @@ func download(videoURL string) {
 	var (
 		domain string
 		err    error
-		data   []downloader.VideoData
+		data   []downloader.Data
 	)
 	bilibiliShortLink := utils.MatchOneOf(videoURL, `^(av|ep)\d+`)
 	if bilibiliShortLink != nil {
@@ -135,16 +135,20 @@ func download(videoURL string) {
 		data, err = universal.Download(videoURL)
 	}
 	if err != nil {
+		// if this error occurs, it means that an error occurred before actually starting to extract data
+		// (there is an error in the preparation step), and the data list is empty.
 		printError(videoURL, err)
 	}
 	for _, item := range data {
-		if item.Site == "" {
-			// empty data
+		if item.Err != nil {
+			// if this error occurs, the preparation step is normal, but the data extraction is wrong.
+			// the data is an empty struct.
+			printError(item.URL, item.Err)
 			continue
 		}
 		err = item.Download(videoURL)
 		if err != nil {
-			printError(videoURL, err)
+			printError(item.URL, err)
 		}
 	}
 }
@@ -160,6 +164,7 @@ func main() {
 		utils.PrintVersion()
 	}
 	if config.File != "" {
+		// read URL list from file
 		file, err := os.Open(config.File)
 		if err != nil {
 			fmt.Println(err)
@@ -181,6 +186,8 @@ func main() {
 		return
 	}
 	if config.Cookie != "" {
+		// If config.Cookie is a file path, convert it to a string to ensure
+		// config.Cookie is always string
 		if _, fileErr := os.Stat(config.Cookie); fileErr == nil {
 			// Cookie is a file
 			data, err := ioutil.ReadFile(config.Cookie)
